@@ -16,7 +16,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_FILE_SIZE = 30 * 1024 * 1024
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 75
 MAX_CHUNKS = 100
@@ -121,7 +121,7 @@ def format_context(chunks: List[dict]) -> str:
 def call_ollama(prompt: str) -> str:
     try:
         completed = subprocess.run(
-            ["ollama", "run", "llama3.2:latest", prompt],
+            ["ollama", "run", "smollm2:1.7b", prompt],
             capture_output=True,
             text=True,
             timeout=60,
@@ -175,7 +175,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
             "index.html",
             {
                 "request": request,
-                "answer": "PDF must be 10 MB or smaller.",
+                "answer": "PDF must be 30 MB or smaller.",
                 "show_upload": bool(documents),
                 "uploaded_files": uploaded_files,
             },
