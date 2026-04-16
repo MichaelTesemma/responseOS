@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -17,6 +16,12 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+MAX_FILE_SIZE = 10 * 1024 * 1024
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 75
+MAX_CHUNKS = 100
+EMBED_BATCH_SIZE = 8
+
 model = SentenceTransformer("all-MiniLM-L6-v2")
 documents: List[dict] = []
 uploaded_files: List[dict] = []
@@ -29,15 +34,19 @@ def format_size(num_bytes: int) -> str:
     if num_bytes < 1024 * 1024:
         return f"{num_bytes / 1024:.1f} KB"
     return f"{num_bytes / (1024 * 1024):.1f} MB"
-uploaded_file: Optional[dict] = None
 
-
-def format_size(num_bytes: int) -> str:
-    if num_bytes < 1024:
-        return f"{num_bytes} B"
-    if num_bytes < 1024 * 1024:
-        return f"{num_bytes / 1024:.1f} KB"
-    return f"{num_bytes / (1024 * 1024):.1f} MB"
+def clean_text(text: str) -> str:
+    lines = []
+    previous_line = None
+    for line in text.splitlines():
+        cleaned = line.strip()
+        if not cleaned:
+            continue
+        if cleaned == previous_line:
+            continue
+        previous_line = cleaned
+        lines.append(cleaned)
+    return " ".join(lines)
 
 
 def extract_text_from_pdf(file: UploadFile) -> str:
@@ -49,18 +58,19 @@ def extract_text_from_pdf(file: UploadFile) -> str:
         text = page.extract_text() or ""
         if text.strip():
             pages.append(text)
-    return "\n\n".join(pages).strip()
+    raw_text = "\n\n".join(pages).strip()
+    return clean_text(raw_text)
 
 
-def chunk_text(text: str, chunk_size: int = 400, overlap: int = 50) -> List[str]:
+def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
     words = text.split()
     chunks = []
     start = 0
-    while start < len(words):
+    while start < len(words) and len(chunks) < MAX_CHUNKS:
         end = min(start + chunk_size, len(words))
         chunk = " ".join(words[start:end]).strip()
-        if chunk:
-            chunks.append(chunk)
+        if len(chunk.split()) >= 50:
+            chunks.append(chunk[:1000].strip())
         if end == len(words):
             break
         start += chunk_size - overlap
@@ -68,7 +78,12 @@ def chunk_text(text: str, chunk_size: int = 400, overlap: int = 50) -> List[str]
 
 
 def embed_texts(texts: List[str]) -> np.ndarray:
-    return model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+    embeddings = []
+    for i in range(0, len(texts), EMBED_BATCH_SIZE):
+        batch = texts[i : i + EMBED_BATCH_SIZE]
+        batch_embeddings = model.encode(batch, convert_to_numpy=True, normalize_embeddings=True)
+        embeddings.append(batch_embeddings)
+    return np.vstack(embeddings)
 
 
 def index_document(text: str, file_id: int) -> None:
@@ -145,6 +160,24 @@ async def upload(request: Request, file: UploadFile = File(...)):
                 "request": request,
                 "answer": "Please upload a PDF file.",
                 "show_upload": bool(documents),
+                "uploaded_files": uploaded_files,
+            },
+        )
+
+    size = 0
+    if hasattr(file.file, "seek"):
+        file.file.seek(0, os.SEEK_END)
+        size = file.file.tell()
+        file.file.seek(0)
+
+    if size > MAX_FILE_SIZE:
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "answer": "PDF must be 10 MB or smaller.",
+                "show_upload": bool(documents),
+                "uploaded_files": uploaded_files,
             },
         )
 
@@ -156,6 +189,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
                 "request": request,
                 "answer": "Could not extract text from the uploaded PDF.",
                 "show_upload": bool(documents),
+                "uploaded_files": uploaded_files,
             },
         )
 
@@ -163,15 +197,6 @@ async def upload(request: Request, file: UploadFile = File(...)):
     file_id = next_file_id
     next_file_id += 1
     index_document(text, file_id)
-    if hasattr(file.file, "seek"):
-        file.file.seek(0)
-    size = 0
-    try:
-        size = file.file.seek(0, os.SEEK_END)
-    except Exception:
-        size = 0
-    if hasattr(file.file, "seek"):
-        file.file.seek(0)
 
     uploaded_files.append({
         "id": file_id,
