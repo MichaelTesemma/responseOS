@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF QA Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>PDF QA Dashboard</h1>
+
+      <section class="card">
+        <h2>Upload a PDF</h2>
+        <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data" onsubmit="showUploadLoading()">
+          <input type="file" name="file" accept="application/pdf" required />
+          <button type="submit">Upload</button>
+        </form>
+        <div id="upload-status" class="upload-status" aria-live="polite">
+          <div class="upload-label">Uploading PDF...</div>
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Ask a question</h2>
+        <form id="ask-form" action="/ask" method="post" onsubmit="showAskLoading()">
+          <input type="text" name="question" placeholder="Ask a question..." required />
+          <button type="submit">Ask</button>
+        </form>
+        <div id="ask-status" class="ask-status" aria-live="polite">
+          <div class="upload-label">Generating answer...</div>
+          <div class="progress-bar">
+            <div class="progress-fill ask-fill"></div>
+          </div>
+        </div>
+      </section>
+
+      {% if uploaded %}
+      <section class="card success-card">
+        <h2>PDF uploaded</h2>
+        <p>Your document was uploaded successfully.</p>
+      </section>
+      {% endif %}
+
+      {% if answer %}
+      <section class="card answer-card">
+        <h2>Answer</h2>
+        <div class="answer-text">{{ answer }}</div>
+      </section>
+      {% endif %}
+
+      {% if not show_upload %}
+      <section class="card hint-card">
+        <p>Upload a PDF to enable question answering.</p>
+      </section>
+      {% endif %}
+    </div>
+    <script>
+      function showUploadLoading() {
+        var status = document.getElementById('upload-status');
+        if (!status) return;
+        status.classList.add('active');
+        var fill = status.querySelector('.progress-fill');
+        if (!fill) return;
+        fill.style.width = '0%';
+        setTimeout(function() { fill.style.width = '40%'; }, 50);
+        setTimeout(function() { fill.style.width = '70%'; }, 400);
+        setTimeout(function() { fill.style.width = '95%'; }, 1200);
+      }
+
+      function showAskLoading() {
+        var status = document.getElementById('ask-status');
+        if (!status) return;
+        status.classList.add('active');
+        var fill = status.querySelector('.ask-fill');
+        if (!fill) return;
+        fill.style.width = '0%';
+        setTimeout(function() { fill.style.width = '30%'; }, 50);
+        setTimeout(function() { fill.style.width = '60%'; }, 300);
+        setTimeout(function() { fill.style.width = '85%'; }, 900);
+        setTimeout(function() { fill.style.width = '98%'; }, 1800);
+      }
+    </script>
+  </body>
+</html>
