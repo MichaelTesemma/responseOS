@@ -70,6 +70,18 @@ button.secondary:hover {
   background: #ea580c;
 }
 
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.file-card {
+  flex: 1 1 240px;
+  min-width: 240px;
+}
+
 .file-card p {
   margin-top: 0;
   margin-bottom: 14px;

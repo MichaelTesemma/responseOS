@@ -34,6 +34,21 @@
       </section>
       {% endif %}
 
+      {% if uploaded_files %}
+      <section class="file-list">
+        {% for file in uploaded_files %}
+        <div class="card file-card">
+          <h2>Uploaded file</h2>
+          <p><strong>{{ file.filename }}</strong> <span class="file-meta">({{ file.size }})</span></p>
+          <form action="/remove" method="post">
+            <input type="hidden" name="file_id" value="{{ file.id }}" />
+            <button type="submit" class="secondary">Remove</button>
+          </form>
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
       <section class="card">
         <h2>Ask a question</h2>
         <form id="ask-form" action="/ask" method="post" onsubmit="showAskLoading()">

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -19,6 +19,16 @@ templates = Jinja2Templates(directory="app/templates")
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 documents: List[dict] = []
+uploaded_files: List[dict] = []
+next_file_id = 1
+
+
+def format_size(num_bytes: int) -> str:
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    return f"{num_bytes / (1024 * 1024):.1f} MB"
 uploaded_file: Optional[dict] = None
 
 
@@ -61,7 +71,7 @@ def embed_texts(texts: List[str]) -> np.ndarray:
     return model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
 
 
-def index_document(text: str) -> None:
+def index_document(text: str, file_id: int) -> None:
     chunks = chunk_text(text)
     if not chunks:
         return
@@ -72,6 +82,7 @@ def index_document(text: str) -> None:
             "embedding": emb,
             "id": len(documents) + 1,
             "chunk": idx,
+            "file_id": file_id,
         })
 
 
@@ -120,7 +131,7 @@ async def index(request: Request, uploaded: bool = False):
             "answer": None,
             "show_upload": bool(documents),
             "uploaded": uploaded,
-            "file_info": uploaded_file,
+            "uploaded_files": uploaded_files,
         },
     )
 
@@ -148,7 +159,10 @@ async def upload(request: Request, file: UploadFile = File(...)):
             },
         )
 
-    index_document(text)
+    global next_file_id
+    file_id = next_file_id
+    next_file_id += 1
+    index_document(text, file_id)
     if hasattr(file.file, "seek"):
         file.file.seek(0)
     size = 0
@@ -158,19 +172,20 @@ async def upload(request: Request, file: UploadFile = File(...)):
         size = 0
     if hasattr(file.file, "seek"):
         file.file.seek(0)
-    global uploaded_file
-    uploaded_file = {
+
+    uploaded_files.append({
+        "id": file_id,
         "filename": file.filename,
         "size": format_size(size),
-    }
+    })
     return RedirectResponse(url="/?uploaded=1", status_code=303)
 
 
 @app.post("/remove")
-async def remove(request: Request):
-    global documents, uploaded_file
-    documents = []
-    uploaded_file = None
+async def remove(request: Request, file_id: int = Form(...)):
+    global documents, uploaded_files
+    documents = [doc for doc in documents if doc.get("file_id") != file_id]
+    uploaded_files = [item for item in uploaded_files if item["id"] != file_id]
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -193,7 +208,15 @@ async def ask(request: Request, question: str = Form(...)):
         f"{question}\n"
     )
     answer = call_ollama(prompt)
-    return templates.TemplateResponse("index.html", {"request": request, "answer": answer, "show_upload": True})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "answer": answer,
+            "show_upload": True,
+            "uploaded_files": uploaded_files,
+        },
+    )
 
 
 if __name__ == "__main__":
