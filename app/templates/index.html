@@ -24,6 +24,16 @@
         </div>
       </section>
 
+      {% if file_info %}
+      <section class="card file-card">
+        <h2>Uploaded file</h2>
+        <p><strong>{{ file_info.filename }}</strong> <span class="file-meta">({{ file_info.size }})</span></p>
+        <form action="/remove" method="post">
+          <button type="submit" class="secondary">Remove uploaded file</button>
+        </form>
+      </section>
+      {% endif %}
+
       <section class="card">
         <h2>Ask a question</h2>
         <form id="ask-form" action="/ask" method="post" onsubmit="showAskLoading()">

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -19,9 +19,20 @@ templates = Jinja2Templates(directory="app/templates")
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 documents: List[dict] = []
+uploaded_file: Optional[dict] = None
+
+
+def format_size(num_bytes: int) -> str:
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    return f"{num_bytes / (1024 * 1024):.1f} MB"
 
 
 def extract_text_from_pdf(file: UploadFile) -> str:
+    if hasattr(file.file, "seek"):
+        file.file.seek(0)
     reader = PdfReader(file.file)
     pages = []
     for page in reader.pages:
@@ -109,6 +120,7 @@ async def index(request: Request, uploaded: bool = False):
             "answer": None,
             "show_upload": bool(documents),
             "uploaded": uploaded,
+            "file_info": uploaded_file,
         },
     )
 
@@ -137,7 +149,29 @@ async def upload(request: Request, file: UploadFile = File(...)):
         )
 
     index_document(text)
+    if hasattr(file.file, "seek"):
+        file.file.seek(0)
+    size = 0
+    try:
+        size = file.file.seek(0, os.SEEK_END)
+    except Exception:
+        size = 0
+    if hasattr(file.file, "seek"):
+        file.file.seek(0)
+    global uploaded_file
+    uploaded_file = {
+        "filename": file.filename,
+        "size": format_size(size),
+    }
     return RedirectResponse(url="/?uploaded=1", status_code=303)
+
+
+@app.post("/remove")
+async def remove(request: Request):
+    global documents, uploaded_file
+    documents = []
+    uploaded_file = None
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/ask")

@@ -61,6 +61,25 @@ button:hover {
   background: #1d4ed8;
 }
 
+button.secondary {
+  background: #f97316;
+  margin-top: 8px;
+}
+
+button.secondary:hover {
+  background: #ea580c;
+}
+
+.file-card p {
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
+.file-meta {
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
 .upload-status,
 .ask-status {
   display: none;
